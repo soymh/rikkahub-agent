@@ -172,9 +172,15 @@ Java_me_rerere_llamacpp_LlamaCppJni_nativeApplyTemplate(
         common_chat_templates_ptr tmpls = common_chat_templates_init(model, "");
 
         common_chat_templates_inputs inputs;
-        inputs.messages = common_chat_msgs_parse_oaicompat(request.at("messages"));
+        // New llama.cpp takes its own common_json here, which is deliberately NOT
+        // constructible from nlohmann::json. Bridge via dump/re-parse: dump() emits
+        // guaranteed-valid JSON (ASCII-escaped, so supplementary-plane characters
+        // survive the round trip), and the request was already validated on parse.
+        inputs.messages = common_chat_msgs_parse_oaicompat(
+                common_json::parse(request.at("messages").dump()));
         if (request.contains("tools") && !request.at("tools").is_null()) {
-            inputs.tools = common_chat_tools_parse_oaicompat(request.at("tools"));
+            inputs.tools = common_chat_tools_parse_oaicompat(
+                    common_json::parse(request.at("tools").dump()));
         }
         // Left at its default of "auto" the tool-call grammar permits zero calls, so the model
         // may always decline to call anything: chat.cpp derives both `min_calls` and whether
