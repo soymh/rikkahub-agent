@@ -77,14 +77,20 @@ android {
                     if (keyAliasValue == null) add("keyAlias")
                     if (keyPasswordValue == null) add("keyPassword")
                 }
-                logger.warn("Signing config: missing $missing, release build will be unsigned")
+                logger.warn("Signing config: missing $missing, release build will fall back to debug signing")
             }
         }
     }
 
     buildTypes {
         release {
-            signingConfig = signingConfigs.getByName("release")
+            val releaseSigning = signingConfigs.getByName("release")
+            // AGP 9's validateSigningRelease fails the build when the assigned
+            // signing config has no keystore. Fall back to debug signing so a
+            // build without secrets still produces an installable APK; a real
+            // keystore (local.properties or RELEASE_* env vars) takes priority.
+            signingConfig = if (releaseSigning.storeFile != null) releaseSigning
+                            else signingConfigs.getByName("debug")
             optimization {
                 enable = true
             }
