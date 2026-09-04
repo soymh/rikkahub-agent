@@ -46,6 +46,19 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-gradle-
 
+      - name: Install ccache (speeds up NDK rebuilds)
+        run: sudo apt-get update && sudo apt-get install -y ccache
+
+      - name: Cache ccache
+        uses: actions/cache@v4
+        with:
+          path: ~/.ccache
+          # C++ sources change rarely (submodule bumps, JNI edits); a stable
+          # key plus prefix fallback keeps hits across unrelated commits.
+          key: ${{ runner.os }}-ccache-${{ hashFiles('llama-cpp/src/main/cpp/**', 'workspace/src/main/cpp/**') }}
+          restore-keys: |
+            ${{ runner.os }}-ccache-
+
       - name: Set up Bun (web-ui install)
         uses: oven-sh/setup-bun@v2
         with:
@@ -66,6 +79,7 @@ jobs:
 
       - name: Build release APKs + AAB
         run: |
+          ccache -z || true
           ./gradlew :app:assembleRelease :app:bundleRelease \
             --no-daemon \
             --stacktrace
@@ -77,6 +91,17 @@ jobs:
           RELEASE_STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
           RELEASE_KEY_ALIAS:      ${{ secrets.RELEASE_KEY_ALIAS }}
           RELEASE_KEY_PASSWORD:   ${{ secrets.RELEASE_KEY_PASSWORD }}
+          # The NDK toolchain wraps compiler calls with $NDK_CCACHE when set.
+          # Default dir (~/.ccache) matches the Cache ccache step's path.
+          # BASEDIR+NOHASHDIR keep hits valid despite absolute debug paths.
+          NDK_CCACHE: ccache
+          CCACHE_BASEDIR: ${{ github.workspace }}
+          CCACHE_NOHASHDIR: "true"
+          CCACHE_MAXSIZE: 2G
+
+      - name: Show ccache stats
+        if: always()
+        run: ccache -s || true
 
       - name: List built artifacts
         run: |
@@ -85,36 +110,18 @@ jobs:
           ls -la app/build/outputs/apk/release/ 2>/dev/null || true
           ls -la app/build/outputs/bundle/release/ 2>/dev/null || true
 
-      - name: Upload universal APK
-        if: hashFiles('app/build/outputs/apk/release/app-universal-release.apk') != ''
+      - name: Upload APKs
         uses: actions/upload-artifact@v4
         with:
-          name: apk-universal
-          path: app/build/outputs/apk/release/app-universal-release.apk
-          if-no-files-found: warn
-
-      - name: Upload arm64-v8a APK
-        if: hashFiles('app/build/outputs/apk/release/app-arm64-v8a-release.apk') != ''
-        uses: actions/upload-artifact@v4
-        with:
-          name: apk-arm64-v8a
-          path: app/build/outputs/apk/release/app-arm64-v8a-release.apk
-          if-no-files-found: warn
-
-      - name: Upload x86_64 APK
-        if: hashFiles('app/build/outputs/apk/release/app-x86_64-release.apk') != ''
-        uses: actions/upload-artifact@v4
-        with:
-          name: apk-x86_64
-          path: app/build/outputs/apk/release/app-x86_64-release.apk
+          name: apk-release
+          path: app/build/outputs/apk/release/*.apk
           if-no-files-found: warn
 
       - name: Upload AAB
-        if: hashFiles('app/build/outputs/bundle/release/app-release.aab') != ''
         uses: actions/upload-artifact@v4
         with:
           name: aab-release
-          path: app/build/outputs/bundle/release/app-release.aab
+          path: app/build/outputs/bundle/release/*.aab
           if-no-files-found: warn
 
   release:
