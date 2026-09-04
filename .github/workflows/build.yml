@@ -52,9 +52,12 @@ jobs:
           bun-version: latest
 
       - name: Set up pnpm (web-ui build)
+        # Must be v11: pnpm 9 errors with "packages field missing or empty"
+        # because web-ui/pnpm-workspace.yaml has no `packages` field (only
+        # `allowBuilds`). pnpm 11 tolerates that. Matches upstream CI.
         uses: pnpm/action-setup@v4
         with:
-          version: 9
+          version: 11
 
       - name: Set up Node 20
         uses: actions/setup-node@v4
