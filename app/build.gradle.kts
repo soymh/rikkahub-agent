@@ -52,14 +52,16 @@ android {
                 localProperties.load(FileInputStream(localPropertiesFile))
             }
 
-            val storeFilePath: String? = localProperties.getProperty("storeFile")
-                ?: System.getenv("RELEASE_STORE_FILE")
-            val storePasswordValue: String? = localProperties.getProperty("storePassword")
-                ?: System.getenv("RELEASE_STORE_PASSWORD")
-            val keyAliasValue: String? = localProperties.getProperty("keyAlias")
-                ?: System.getenv("RELEASE_KEY_ALIAS")
-            val keyPasswordValue: String? = localProperties.getProperty("keyPassword")
-                ?: System.getenv("RELEASE_KEY_PASSWORD")
+            // Missing GitHub secrets arrive as "" (key defined, value empty),
+            // so blank must collapse to null too — otherwise file("") throws
+            // "Cannot convert '' to File" at configuration time.
+            fun prop(key: String, env: String): String? =
+                (localProperties.getProperty(key) ?: System.getenv(env))?.ifBlank { null }
+
+            val storeFilePath: String? = prop("storeFile", "RELEASE_STORE_FILE")
+            val storePasswordValue: String? = prop("storePassword", "RELEASE_STORE_PASSWORD")
+            val keyAliasValue: String? = prop("keyAlias", "RELEASE_KEY_ALIAS")
+            val keyPasswordValue: String? = prop("keyPassword", "RELEASE_KEY_PASSWORD")
 
             if (storeFilePath != null && storePasswordValue != null &&
                 keyAliasValue != null && keyPasswordValue != null
